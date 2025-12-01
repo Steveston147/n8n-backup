@@ -1,0 +1,283 @@
+{
+  "name": "04_RAG_RSJPFAQ_QA_Responder_v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rsjp-faq-qa",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "76223eeb-e522-4d23-916b-ebc7b04da09a",
+      "name": "00_Webhook_ManualQA",
+      "webhookId": "1ede6442-eb2e-43a9-b3db-5c84bc5e50ac"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "input",
+              "value": "={{$json.textForEmbedding}}"
+            },
+            {
+              "name": "model",
+              "value": "text-embedding-3-small"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        416,
+        -32
+      ],
+      "id": "1d1ba034-2c9a-4751-a505-b474dbe2af91",
+      "name": "01_OpenAI_Embedding_Query"
+    },
+    {
+      "parameters": {
+        "jsCode": "const question = $json.originalQuestion || \"\";\n\nreturn {\n  json: {\n    textForEmbedding: question,\n    originalQuestion: question\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        96
+      ],
+      "id": "58d56a97-404d-4df3-9d36-e374e4f59da5",
+      "name": "02_Format_Text_For_Embedding"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://rsjp-rwjp-v2-s86bwtk.svc.aped-4627-b74a.pinecone.io/query",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Api-Key",
+              "value": "pcsk_2DYVK1_3uibMjeoRKcZCL3hra2hPNsmfxHj1BeU2P6b2PnEBAp6bvsex2a9zJPBZQPrh26"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  JSON.stringify({\n    vector: $json.data[0].embedding,        // 01_OpenAI_Embedding_Query の出力\n    topK: 3,\n    includeValues: false,\n    includeMetadata: true,\n    namespace: \"rsjp_rsjpfaq_v1\",\n    filter: {\n      status: \"Varified\"                   // ← ここを Varified（a）にする\n    }\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        624,
+        0
+      ],
+      "id": "315ab476-3c48-45ba-b922-d8ee45092801",
+      "name": "03_Pinecone_Query"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer  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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-4o-mini"
+            },
+            {
+              "name": "messages[0].role",
+              "value": "system"
+            },
+            {
+              "name": "messages[0].content",
+              "value": "あなたは立命館大学の短期留学プログラム（RSJP / RWJP / RWJP Express など）について、学生からの質問に答えるアシスタントです。\nこれから渡される「Context:」には、ナレッジベースから取得した関連情報だけが含まれています。\n\n【言語に関するルール】\n\n回答は、質問に使われている言語で行ってください。\n\n日本語の質問には日本語で、英語の質問には英語で、中国語の質問には中国語で、韓国語の質問には韓国語で答えてください。\n\nContext の本文が日本語でも、内容を理解したうえで「質問の言語」に翻訳して説明してください（固有名詞を除き、原文をそのまま貼らないこと）。\n\n複数言語が混ざる場合は、もっとも文字数が多い言語を優先してください。\n\n言語判定が難しい場合や誤認の可能性が高い場合は、日本語で回答して構いません。その場合は必ず「言語判定が難しかったため、日本語で回答しています。」という一文を入れてください。\n\n【情報不足時の対応】\nContext に十分な情報がない、または関連が薄い場合は、推測せずに次の文言を使ってください。\n\n日本語の例：\n「ナレッジベース内に、この質問に直接答えられる十分な情報が見つかりませんでした。お手数ですが、メール（rsjprwjp@st.ritsumei.ac.jp\n）で担当者に問い合わせてください。」\n\n英語の例：\n\"I could not find enough information in the knowledge base to answer this question directly. Please contact the program office by email (rsjprwjp@st.ritsumei.ac.jp\n) for an official answer.\"\n\n中国語の例：\n「在目前的知识库中，没有找到可以直接回答这个问题的充分信息。麻烦您发送邮件到 rsjprwjp@st.ritsumei.ac.jp\n，向项目事务局确认正式答复。」\n\n韓国語の例：\n「현재 지식 베이스에는 이 질문에 직접 답할 수 있을 만큼 충분한 정보가 없습니다. 정확한 안내를 위해 rsjprwjp@st.ritsumei.ac.jp\n 로 이메일을 보내어 담당 사무국에 문의해 주세요。」\n\n【内容に関するルール】\n\n回答の根拠は 必ず Context 内の情報だけ に限定してください。\n\nContext に書かれていない内容を想像で補わないでください。\n\n質問の意図を変えず、事実関係を捏造しないでください。\n\nContext に十分な情報がない場合は、上記の「情報不足」の文例を用い、事務局への問い合わせを案内してください。\n\n回答の最後の方で、次のような一文を必ず入れてください（質問の言語に合わせて翻訳）：\n\n日本語例：「最終的な判断や特別な事情については、必ずプログラム事務局に確認してください。」\n\n英語例：\"For any final decisions or special cases, please confirm with the program office.\"\n\n中国語例：「如需最终判断或有特殊情况，请务必向项目事务局确认。」\n\n韓国語例：「최종적인 판단이나 특별한 사정이 있는 경우에는 반드시 프로그램 사무국에 확인해 주세요。」\n\n【文体・トーン】\n\n学生向けの案内として、丁寧で分かりやすい文にしてください。\n\n堅すぎる事務文書にも、くだけすぎた話し言葉にもならないようにしてください。\n\n不安になりやすいポイントや誤解が多いポイントは、必要に応じて簡潔に注意喚起してください。\n\n分量の目安は 800〜1000文字程度（他言語でも同程度）ですが、読みやすさを優先してください。\n\n以上のルールを守り、以下の「Context」と「質問」をもとに最適な回答を作成してください。"
+            },
+            {
+              "name": "messages[1].role",
+              "value": "user"
+            },
+            {
+              "name": "messages[1].content",
+              "value": "=Question:\n{{ $('02_Format_Text_For_Embedding').item.json.originalQuestion }}\n\nContext:\n{{ $json.matches.map((m, i) => `${i+1}. ${m.metadata.textForEmbedding}`).join('\\n\\n') }}\n"
+            },
+            {
+              "name": "max_tokens",
+              "value": "={{ 1500 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        832,
+        0
+      ],
+      "id": "0ecd58e8-76db-4141-9bcb-d721793970e9",
+      "name": "04_OpenAI_Answer_Generator"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ answer: $json.choices[0].message.content }) }}\n\n\n",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "33bba77f-2e32-4293-ba6f-b32d04ad0ffd",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "40222303-d996-42ba-84fc-6f3b5aa418ae",
+              "name": "originalQuestion",
+              "value": "={{ $json.body.question }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -32,
+        80
+      ],
+      "id": "9f323ebe-ea9e-4cec-a521-85fb651122d9",
+      "name": "00a_Prepare_TextForEmbedding"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "00_Webhook_ManualQA": {
+      "main": [
+        [
+          {
+            "node": "00a_Prepare_TextForEmbedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "01_OpenAI_Embedding_Query": {
+      "main": [
+        [
+          {
+            "node": "03_Pinecone_Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02_Format_Text_For_Embedding": {
+      "main": [
+        [
+          {
+            "node": "01_OpenAI_Embedding_Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03_Pinecone_Query": {
+      "main": [
+        [
+          {
+            "node": "04_OpenAI_Answer_Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04_OpenAI_Answer_Generator": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "00a_Prepare_TextForEmbedding": {
+      "main": [
+        [
+          {
+            "node": "02_Format_Text_For_Embedding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "569ba9a0-9e44-42d2-9aad-ec6fa5a94cfa",
+  "meta": {
+    "instanceId": "806c911d7dc71e902947ff71885a6f9edeccc98ca756aec6f50b2432bc9b35b1"
+  },
+  "id": "zt1SIZBYQMBsgO0G",
+  "tags": []
+}

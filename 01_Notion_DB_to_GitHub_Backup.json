@@ -1,0 +1,151 @@
+{
+  "name": "01_Notion_DB_to_GitHub_Backup",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "762763bf-7991-45e5-9d25-8048e7b2d470",
+      "name": "00_Cron_NotionBackup_Daily"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "2b744c7c-1441-809d-bfa8-efee4d6385f3",
+          "mode": "list",
+          "cachedResultName": "ShortTermPrograms_QA",
+          "cachedResultUrl": "https://www.notion.so/2b744c7c1441809dbfa8efee4d6385f3"
+        },
+        "returnAll": true,
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "6492784f-6810-4202-b0d1-09569b3bfac4",
+      "name": "01_Notion_GetManyPages",
+      "credentials": {
+        "notionApi": {
+          "id": "hO7wX2VZGdxW0xVB",
+          "name": "Notion_Manual_Importer"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 02_Code_BuildBackupJson\n\nconst items = $input.all();\nconst now = new Date();\n\n// YYYY-MM-DD 形式\nconst dateStr = now.toISOString().slice(0, 10);\n\n// Notion DB の ID（固定）\nconst databaseId = '2b744c7c1441809dbfa8efee4d6385f3';\n\n// GitHub に保存するファイルパス\n// 例: notion/shortterm_programs_2025-11-30.json\nconst filePath = `notion/shortterm_programs_${dateStr}.json`;\n\nconst backup = {\n  backupDate: now.toISOString(),\n  databaseId,\n  itemCount: items.length,\n  items: items.map(i => i.json),\n};\n\nreturn [\n  {\n    json: {\n      filePath,\n      fileContent: JSON.stringify(backup, null, 2),\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "11af8ba5-f803-446c-b78a-26f578fd1f74",
+      "name": "02_Code_BuildBackupJson"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "owner": {
+          "__rl": true,
+          "value": "Steveston147",
+          "mode": "list",
+          "cachedResultName": "Steveston147",
+          "cachedResultUrl": "https://github.com/Steveston147"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "n8n-backup",
+          "mode": "list",
+          "cachedResultName": "n8n-backup",
+          "cachedResultUrl": "https://github.com/Steveston147/n8n-backup"
+        },
+        "filePath": "={{$json[\"filePath\"]}}",
+        "fileContent": "={{$json[\"fileContent\"]}}",
+        "commitMessage": "=Notion DB backup {{$json[\"filePath\"]}}"
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "fd59d423-1f08-4efd-9dc8-211394218446",
+      "name": "03_GitHub_CreateFile",
+      "webhookId": "6fe07d4a-fb22-4ce8-8526-1162a531f313",
+      "credentials": {
+        "githubApi": {
+          "id": "h0vJcunM3XjOKWCt",
+          "name": "GitHub_n8n_backup"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "00_Cron_NotionBackup_Daily": {
+      "main": [
+        [
+          {
+            "node": "01_Notion_GetManyPages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "01_Notion_GetManyPages": {
+      "main": [
+        [
+          {
+            "node": "02_Code_BuildBackupJson",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02_Code_BuildBackupJson": {
+      "main": [
+        [
+          {
+            "node": "03_GitHub_CreateFile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b6278a18-4548-487b-acaf-aac5ea8c3ded",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "806c911d7dc71e902947ff71885a6f9edeccc98ca756aec6f50b2432bc9b35b1"
+  },
+  "id": "IHDPBeyTlexLPg78",
+  "tags": []
+}
